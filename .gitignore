@@ -1,3 +1,2 @@
-*.log
-efu
-*.json
+__*
+_TE*
