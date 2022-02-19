@@ -23,6 +23,19 @@ function WriteJsonFile($path, $obj) {
   WriteFile  $path $content
 }
 
+<#* 统计文件行数，-ReadCount参数的取值影响统计速度和消耗内存 *#>
+<#* 参考：https://www.codenong.com/12084642/ *#>
+function CountLine($path){
+  $cnt = 0
+  Get-Content -Path $path -ReadCount 500 |% { $cnt += $_.Count }
+  return $cnt
+}
+
+<#* 获取文件大小（单位：字节） *#>
+function GetSize($path){
+  return (Get-ChildItem $path).Length
+}
+
 $timeFormat = "yyyy/MM/dd HH:mm:ss.fffffff"
 <#* 返回当前距 $time（$timeFormat 格式） 过去了多少秒 *#>
 function TimeCalc($time) {

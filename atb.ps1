@@ -14,8 +14,10 @@ $slptime = 500.0
 $evtInctName = "Te"
 <#* 磁盘文件列表（EFU格式）存放目录 *#>
 $efuPath = "__efu"
-<#* 磁盘文件列表（EFU格式）存放目录 *#>
+<#* 目标文件列表存放目录 *#>
 $efupath2 = "__targets"
+<#* 目标文件存放目录 *#>
+$destpath = "__dest"
 
 <#* 主函数：添加/更新磁盘 *#>
 function AddDisk($d) {
@@ -34,15 +36,15 @@ function AddDisk($d) {
   #>
   <#* $letter：盘符 *#>
   $letter = $vol.DriveLetter
-  <#* $name：卷标（盘名） *#>
-  $name = $vol.FileSystemLabel
-  <##> Log -s "Update Disk ($letter`:/) ID:[$id] `"$name`""
+  <#* $vol_name：卷标（盘名） *#>
+  $vol_name = $vol.FileSystemLabel
+  <##> Log -s "Update Disk ($letter`:/) ID:[$id] `"$vol_name`""
   <#* 更新哈希表 *#>
   $hash[$id] = @{
     Letter  = $letter;
-    Name    = $name;
+    Name    = $vol_name;
     AddTime = TimeStr;
-    cpy     = @()
+    targets     = @{}
   }
   <#* 保存哈希表至JSON文件 *#>
   WriteJsonFile -path $diskListJsonPath -obj $hash
@@ -56,6 +58,23 @@ function AddDisk($d) {
     GenNeedCopyList -efu "$efuPath\$id.efu" -filter "ext:pptx|ext:ppt" -o "$efuPath2\$id"
   }
   <##> Log -s "Gen targets list using $($excTime.TotalMilliseconds)ms: $(Resolve-Path $efuPath2\$id)"
+  <##> Log -s "Begin copying $(CountLine -path $efuPath2\$id) files"
+  $reader = New-Object System.IO.StreamReader("$efuPath2\$id")
+  $cnt=0
+  while (($line = $reader.ReadLine()) -ne $null)
+  {
+    $name = Split-Path $line -Leaf -Resolve
+    $size = GetSize $efuPath2\$id
+    <##> Log -s "Process No.$cnt size:$size $name"
+
+    if($null -eq $hash[$id].targets[$name]){
+
+    }else
+
+    Copy-Item $line $dest
+    $cnt += 1
+  }
+  $reader.Dispose()
 }
 
 <#* 将信息写入日志文件（带时间） *#>
