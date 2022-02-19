@@ -1,5 +1,6 @@
 Import-Module .\Util.psm1
 Import-Module .\WaitUntilEvtLaunch.psm1
+Import-Module .\GenNeedCopyList.psm1
 
 <#* 存储已处理磁盘信息的JSON文件路径 *#>
 $diskListJsonPath = "__x.json"
@@ -13,6 +14,8 @@ $slptime = 500.0
 $evtInctName = "Te"
 <#* 磁盘文件列表（EFU格式）存放目录 *#>
 $efuPath = "__efu"
+<#* 磁盘文件列表（EFU格式）存放目录 *#>
+$efupath2 = "__targets"
 
 <#* 主函数：添加/更新磁盘 *#>
 function AddDisk($d) {
@@ -23,7 +26,7 @@ function AddDisk($d) {
   <#* 其形如下表：
      DriveLetter    FriendlyName  FileSystemType DriveType HealthStatus
   ----------------- ------------- -------------- --------- ------------
-          E            ******         FAT32     Removable   Healthy   
+          E            ******         FAT32      Removable   Healthy   
 
   OperationalStatus SizeRemaining      Size
   ----------------- ------------- --------------
@@ -44,11 +47,15 @@ function AddDisk($d) {
   <#* 保存哈希表至JSON文件 *#>
   WriteJsonFile -path $diskListJsonPath -obj $hash
   <#* 使用指定EVT实例生成整个磁盘的文件列表（EFU格式） *#>
-  $excTime1 = Measure-Command {
+  $excTime = Measure-Command {
     Everything.exe -instance $evtInctName -create-file-list $efuPath\$id.efu $letter`:\
     do {} until((Test-Path $efuPath\$id.efu) -eq $true)
   }
-  <##> Log -s "Create EFU file $(Resolve-Path $efuPath\$id.efu) using $($excTime1.TotalMilliseconds)ms"
+  <##> Log -s "Create EFU file using $($excTime.TotalMilliseconds)ms: $(Resolve-Path $efuPath\$id.efu)"
+  $excTime = Measure-Command {
+    GenNeedCopyList -efu "$efuPath\$id.efu" -filter "ext:pptx|ext:ppt" -o "$efuPath2\$id"
+  }
+  <##> Log -s "Gen targets list using $($excTime.TotalMilliseconds)ms: $(Resolve-Path $efuPath2\$id)"
 }
 
 <#* 将信息写入日志文件（带时间） *#>
@@ -69,6 +76,10 @@ if ((Test-Path $diskListJsonPath) -ne "True") {
 if ((Test-Path $efuPath) -ne "True") {
   mkdir $efuPath
   <##> Log -s "Create $(Resolve-Path $efuPath)"
+}
+if ((Test-Path $efupath2) -ne "True") {
+  mkdir $efupath2
+  <##> Log -s "Create $(Resolve-Path $efupath2)"
 }
 
 <#* 从JSON文件中读取已处理磁盘信息哈希表 *#>
