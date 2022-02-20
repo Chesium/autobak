@@ -33,7 +33,7 @@ function GenNeedCopyList($efu, $filter, $o) {
   # 不事先删除原先那份的话无法判断何时生成的新配置文件
   Remove-Item $__ini
   # 使用es导出目标文件列表
-  es -instance $__inst $filter -export-txt $o
+  es -instance $__inst $filter -sort-size-ascending -export-txt $o
   # 退出临时EVT实例
   Everything -instance $__inst -exit
   # 等候EVT退出时重新生成配置文件

@@ -19,8 +19,8 @@ function ReadJsonFile($path) {
 
 <#* 将对象 $obj 转换为JSON格式，写入路径为 $path 的文件 *#>
 function WriteJsonFile($path, $obj) {
-  $content = ConvertTo-Json  -Depth 10 $obj
-  WriteFile  $path $content
+  $content = ConvertTo-Json -Depth 100 $obj
+  WriteFile $path $content
 }
 
 <#* 统计文件行数，-ReadCount参数的取值影响统计速度和消耗内存 *#>
@@ -41,6 +41,12 @@ $timeFormat = "yyyy/MM/dd HH:mm:ss.fffffff"
 function TimeCalc($time) {
   $spanObj = New-TimeSpan $([System.DateTime]::ParseExact($time, $timeFormat, $null)) $([System.DateTime]::Now)
   return $spanObj.TotalSeconds
+}
+
+<#* 将相对路径转为 String 类型的绝对路径，即使是不存在的文件也行 *#>
+<#* 参考：https://www.jb51.net/article/53423.htm *#>
+function AbslPath($path) {
+  return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$path")
 }
 
 <#* 返回当前时间的字符串形式，格式由 $timeFormat 决定 *#>

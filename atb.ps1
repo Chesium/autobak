@@ -19,6 +19,11 @@ $efupath2 = "__targets"
 <#* 目标文件存放目录 *#>
 $destpath = "__dest"
 
+<#* 将信息写入日志文件（带时间） *#>
+function Log($s) {
+  Write-Output "[$(TimeStr)]$s" >> $logPath
+}
+
 <#* 主函数：添加/更新磁盘 *#>
 function AddDisk($d) {
   <#* $id：磁盘序列号 *#>
@@ -39,12 +44,18 @@ function AddDisk($d) {
   <#* $vol_name：卷标（盘名） *#>
   $vol_name = $vol.FileSystemLabel
   <##> Log -s "Update Disk ($letter`:/) ID:[$id] `"$vol_name`""
-  <#* 更新哈希表 *#>
-  $hash[$id] = @{
-    Letter  = $letter;
-    Name    = $vol_name;
-    AddTime = TimeStr;
-    targets     = @{}
+  <#* 若无哈希表则新建 *#>
+  if ($null -eq $hash[$id]) {
+    $hash[$id] = @{
+      Letter  = $letter;
+      Name    = $vol_name;
+      AddTime = TimeStr;
+      targets = @{}
+    }
+  }
+  else {
+    <#* 哈希表已存在，更新 AddTime *#>
+    $hash[$id].AddTime = TimeStr
   }
   <#* 保存哈希表至JSON文件 *#>
   WriteJsonFile -path $diskListJsonPath -obj $hash
@@ -53,33 +64,55 @@ function AddDisk($d) {
     Everything.exe -instance $evtInctName -create-file-list $efuPath\$id.efu $letter`:\
     do {} until((Test-Path $efuPath\$id.efu) -eq $true)
   }
-  <##> Log -s "Create EFU file using $($excTime.TotalMilliseconds)ms: $(Resolve-Path $efuPath\$id.efu)"
+  <##> Log -s "Create EFU file using $($excTime.TotalMilliseconds)ms: $(AbslPath $efuPath\$id.efu)"
   $excTime = Measure-Command {
-    GenNeedCopyList -efu "$efuPath\$id.efu" -filter "ext:pptx|ext:ppt" -o "$efuPath2\$id"
+    GenNeedCopyList -efu "$efuPath\$id.efu" -filter "ext:xlsx" -o "$efuPath2\$id"
   }
-  <##> Log -s "Gen targets list using $($excTime.TotalMilliseconds)ms: $(Resolve-Path $efuPath2\$id)"
-  <##> Log -s "Begin copying $(CountLine -path $efuPath2\$id) files"
+  <##> Log -s "Gen targets list using $($excTime.TotalMilliseconds)ms: $(AbslPath $efuPath2\$id)"
+  if ((Test-Path $destpath\$id) -ne "True") {
+    mkdir $destpath\$id
+    # <##> Log -s "Create $(AbslPath $destpath\$id)"
+  }
+  $lineN = CountLine -path $efuPath2\$id
+  <##> Log -s "Begin copying $($lineN) files"
   $reader = New-Object System.IO.StreamReader("$efuPath2\$id")
-  $cnt=0
-  while (($line = $reader.ReadLine()) -ne $null)
-  {
+  $cnt = 1
+  while ($null -ne ($line = $reader.ReadLine()) ) {
     $name = Split-Path $line -Leaf -Resolve
-    $size = GetSize $efuPath2\$id
-    <##> Log -s "Process No.$cnt size:$size $name"
+    $size = GetSize $line
+    <##> Log -s "Processing [$cnt/$lineN] size:$size `"$name`""
 
-    if($null -eq $hash[$id].targets[$name]){
-
-    }else
-
-    Copy-Item $line $dest
-    $cnt += 1
+    # Write-Host $name
+    # Write-Host (ConvertTo-Json -Depth 5 $hash)
+    if ($null -eq $hash[$id].targets[$name]) {
+      <##> Log -s "It's new!"
+      mkdir $destpath\$id\$name
+      $base_path = AbslPath $destpath\$id\$name\$name
+      $excTime = Measure-Command { Copy-Item $line $destpath\$id\$name }
+      <##> Log -s "Copying using $($excTime.TotalMilliseconds)ms: $base_path"
+      $hash[$id].targets[$name] = @{
+        AddTime  = TimeStr;
+        path     = $line;
+        BasePath = $base_path;
+        upd      = @()
+      }
+    }
+    else {
+      <##> Log -s "Déjà vu!"
+      $patch_index = $hash[$id].targets[$name].upd.Length + 1
+      $patch_path = AbslPath $destpath\$id\$name\patch$patch_index
+      $excTime = Measure-Command { bsdiff $hash[$id].targets[$name].BasePath $line $patch_path }
+      <##> Log -s "Gen Patch using $($excTime.TotalMilliseconds)ms: $patch_path"
+      $hash[$id].targets[$name].upd += @{
+        AddTime   = TimeStr;
+        path      = $line;
+        PatchPath = $patch_path
+      }
+    }
+    $cnt ++
+    WriteJsonFile -path $diskListJsonPath -obj $hash
   }
   $reader.Dispose()
-}
-
-<#* 将信息写入日志文件（带时间） *#>
-function Log($s) {
-  Write-Output "[$(TimeStr)]$s" >> $logPath
 }
 
 <#*## #### #### ####
@@ -90,15 +123,15 @@ function Log($s) {
 <#*#: 检查各个目录是否存在，若无，则新建 #>
 if ((Test-Path $diskListJsonPath) -ne "True") {
   New-Item $diskListJsonPath
-  <##> Log -s "Create $(Resolve-Path $diskListJsonPath)"
+  <##> Log -s "Create $(AbslPath $diskListJsonPath)"
 }
 if ((Test-Path $efuPath) -ne "True") {
   mkdir $efuPath
-  <##> Log -s "Create $(Resolve-Path $efuPath)"
+  <##> Log -s "Create $(AbslPath $efuPath)"
 }
 if ((Test-Path $efupath2) -ne "True") {
   mkdir $efupath2
-  <##> Log -s "Create $(Resolve-Path $efupath2)"
+  <##> Log -s "Create $(AbslPath $efupath2)"
 }
 
 <#* 从JSON文件中读取已处理磁盘信息哈希表 *#>
